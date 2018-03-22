@@ -57,14 +57,18 @@ func (p *parser) WriteErrorLog(msg string) {
 func (p *parser) ParseSpec(location string, filename string) error {
 	file, err := os.Open(location)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println("error opening file")
+		return err
 	}
 	scanner := bufio.NewScanner(file)
 
 	// skip the first column of the CSV
 	scanner.Scan()
 	fmt.Println(fmt.Sprintf("Table created with name %s", filename))
-	p.db.Exec(fmt.Sprintf("CREATE TABLE %s()", filename))
+	_, err = p.db.Exec(fmt.Sprintf("CREATE TABLE %s()", filename))
+	if err != nil {
+		return err
+	}
 	p.widthSpecifications[filename] = []int{}
 	for scanner.Scan() {
 		currLine := scanner.Text()
@@ -80,7 +84,7 @@ func (p *parser) ParseSpec(location string, filename string) error {
 		p.db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", filename, columnName, columnType))
 	}
 	if err := scanner.Err(); err != nil {
-		log.Fatal(err)
+		return err
 	}
 	file.Close()
 	return nil
@@ -89,15 +93,13 @@ func (p *parser) ParseSpec(location string, filename string) error {
 // Used to store data in appropriate format
 func (p *parser) StoreData(location string, filename string) error {
 	if p.widthSpecifications[filename] == nil || len(p.widthSpecifications[filename]) == 0 {
-		fmt.Println("doent exist da map")
 		return fmt.Errorf("No spec for this data type %s exists", filename)
 	}
 	file, err := os.Open(location)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	scanner := bufio.NewScanner(file)
-	fmt.Println("HELLOO")
 	for scanner.Scan() {
 		currLine := scanner.Text()
 		lineValues := strings.Fields(currLine)
@@ -124,14 +126,9 @@ func (p *parser) StoreData(location string, filename string) error {
 				i++
 			}
 		}
-		fmt.Println(insertValues)
-		// fmt.Println(fmt.Sprintf("INSERT INTO %s VALUES %s", filename, enterValues(insertValues)))
-		something, err := p.db.Exec(fmt.Sprintf("INSERT INTO %s VALUES%s", filename, enterValues(insertValues)))
-		fmt.Println(something)
+		_, err := p.db.Exec(fmt.Sprintf("INSERT INTO %s VALUES%s", filename, enterValues(insertValues)))
 		if err != nil {
-			fmt.Println(err)
-			fmt.Println(something)
-			// log.Fatal(err)
+			fmt.Println("Could not insert into db: %s", err)
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -144,10 +141,7 @@ func (p *parser) StoreData(location string, filename string) error {
 
 func enterValues(valueString []string) string {
 	for i := 0; i < len(valueString); i++ {
-		// if the value is a text, wrap in quotes.
-		// if _, err := strconv.Atoi(valueString[i]); err != nil {
 		valueString[i] = fmt.Sprintf("'%s'", valueString[i])
-		// }
 	}
 	return fmt.Sprintf("(%s)", strings.Join(valueString, ","))
 }
